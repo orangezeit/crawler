@@ -8,7 +8,7 @@ import time
 
 class InstagramCrawler:
 
-    def __init__(self, username):
+    def __init__(self, username, limit=1000):
 
         self.headers = {'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                                       'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/75.0.3770.142 Safari/537.36'}
@@ -17,6 +17,7 @@ class InstagramCrawler:
         self.person_id = None
         self.files = set()
         self.count = 0
+        self.limit = limit
 
     def get(self, url, params=None):
 
@@ -38,11 +39,17 @@ class InstagramCrawler:
         for edge in data['edges']:
 
             if edge['node']['is_video']:
+
                 self.files.add(edge['node']['video_url'])
+
             else:
+
                 self.files.add(edge['node']['display_url'])
 
             self.count += 1
+
+            if self.count == self.limit:
+                break
 
     def parse_main(self):
 
@@ -73,6 +80,9 @@ class InstagramCrawler:
                 self.files.add(edge['node']['display_url'])
                 self.count += 1
 
+            if self.count == self.limit:
+                break
+
         return data['page_info']['end_cursor'], data['page_info']['has_next_page']
 
     def parse_next(self, end_cursor):
@@ -82,6 +92,7 @@ class InstagramCrawler:
         html = self.get('https://www.instagram.com/graphql/query/', params)
 
         if html is None:
+
             print(self.person_id, end_cursor)
             return end_cursor, False
 
@@ -90,13 +101,21 @@ class InstagramCrawler:
         for edge in data['edges']:
 
             if edge['node']['__typename'] == 'GraphSidecar':
+
                 self.parse_post(f"http://www.instagram.com/p/{edge['node']['shortcode']}")
+
             elif edge['node']['is_video']:
+
                 self.files.add(edge['node']['video_url'])
                 self.count += 1
+
             else:
+
                 self.files.add(edge['node']['display_url'])
                 self.count += 1
+
+            if self.count == self.limit:
+                break
 
         return data['page_info']['end_cursor'], data['page_info']['has_next_page']
 
@@ -125,11 +144,10 @@ class InstagramCrawler:
         end_cursor, has_next = self.parse_main()
         print('parsing...', self.count, 'links')
 
-        while has_next:
+        while has_next and self.count < self.limit:
             end_cursor, has_next = self.parse_next(end_cursor)
             print('parsing...', self.count, 'links')
             time.sleep(1)
-            break
 
         print('parsed', self.count, 'links')
         self.download()
@@ -137,36 +155,5 @@ class InstagramCrawler:
 
 if __name__ == '__main__':
 
-    """
-    BASE_URL = 'https://www.instagram.com/accounts/login/'
-    LOGIN_URL = BASE_URL + 'ajax/'
-
-    USERNAME = '123'
-    PASSWD = '456'
-
-    session = requests.Session()
-    session.headers = headers
-    session.headers.update({'Referer': BASE_URL})
-
-    req = session.get(BASE_URL)
-    soup = BeautifulSoup(req.content, 'html.parser')
-    body = soup.find('body')
-
-    pattern = re.compile('window._sharedData')
-    script = body.find("script", text=pattern)
-    data = json.loads(script.get_text()[21:-1])
-
-    csrf = data['config'].get('csrf_token')
-    login_data = {'username': USERNAME, 'password': PASSWD}
-    session.headers.update({'X-CSRFToken': csrf})
-    login = session.post(LOGIN_URL, data=login_data, allow_redirects=True)
-    print(login.content)
-    """
-
-    ic = InstagramCrawler('diegoarnary')
+    ic = InstagramCrawler('instagram', 50)
     ic.crawl()
-
-
-
-
-
